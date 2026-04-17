@@ -340,9 +340,9 @@ var CHARS = [
   { radius: 53,  img: 'images/char4.png', score:  150, color: '#c4b5fd', label: '⑤' },
   { radius: 63,  img: 'images/char5.png', score:  220, color: '#f9a8d4', label: '⑥' },
   { radius: 73,  img: 'images/char6.png', score:  300, color: '#fdba74', label: '⑦' },
-  { radius: 84,  img: 'images/char7.png', score:  420, color: '#a7f3d0', label: '⑧' },
-  { radius: 96,  img: 'images/char8.png', score:  600, color: '#fbcfe8', label: '⑨' },
-  { radius: 108, img: 'images/char9.png', score: 1200, color: '#f9a8d4', label: '⑩' },
+  { radius: 84,  img: '',                 score:  420, color: '#a7f3d0', label: '⑧' },
+  { radius: 96,  img: '',                 score:  600, color: '#fbcfe8', label: '⑨' },
+  { radius: 108, img: '',                 score: 1200, color: '#f9a8d4', label: '⑩' },
 ];
 var MAX_LEVEL = CHARS.length - 1; // 最大レベル（これ以上合体しない）
 
@@ -351,6 +351,7 @@ var MAX_LEVEL = CHARS.length - 1; // 最大レベル（これ以上合体しな�
 // ================================================================
 var CANVAS_W        = Math.min(window.innerWidth, 400);
 var CANVAS_H        = Math.floor(Math.min(window.innerHeight, 900) * 0.72);
+var DPR             = Math.max(1, window.devicePixelRatio || 1);
 var WALL_T          = 20;   // 壁の厚さ
 var DANGER_Y        = 60;   // ゲームオーバー判定ライン（上端からの距離px）
 var DROP_X_INIT     = CANVAS_W / 2;
@@ -385,9 +386,18 @@ var world  = engine.world;
 
 // Canvas 取得・サイズ設定
 var canvas   = document.getElementById('game-canvas');
-canvas.width  = CANVAS_W;
-canvas.height = CANVAS_H;
 var ctx = canvas.getContext('2d');
+setupMainCanvas();
+
+function setupMainCanvas() {
+  canvas.style.width  = CANVAS_W + 'px';
+  canvas.style.height = CANVAS_H + 'px';
+  canvas.width  = Math.floor(CANVAS_W * DPR);
+  canvas.height = Math.floor(CANVAS_H * DPR);
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+}
 
 // ================================================================
 // ■ 壁・床の生成（静的ボディ）
@@ -558,8 +568,21 @@ function updateScoreDisplay() {
 function drawNextPreview(level) {
   var nc   = document.getElementById('next-canvas');
   var nctx = nc.getContext('2d');
+  setupNextCanvas(nc, nctx);
   nctx.clearRect(0, 0, 40, 40);
   drawCharCircle(nctx, 20, 20, 18, level);
+}
+
+/** NEXTプレビューを高DPI向けに初期化 */
+function setupNextCanvas(nc, nctx) {
+  var size = 40;
+  nc.style.width  = size + 'px';
+  nc.style.height = size + 'px';
+  nc.width  = Math.floor(size * DPR);
+  nc.height = Math.floor(size * DPR);
+  nctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  nctx.imageSmoothingEnabled = true;
+  nctx.imageSmoothingQuality = 'high';
 }
 
 // ================================================================
