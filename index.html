@@ -7,6 +7,9 @@
 
 <!-- Matter.js CDN（物理演算） -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+<!-- Firebase CDN（ランキング共有用） -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 
 <style>
 /* ===================================================
@@ -68,6 +71,18 @@ body {
   border: 2px solid #fde68a;
 }
 #next-canvas { border-radius: 50%; }
+
+#btn-title {
+  min-width: 74px;
+  border: none;
+  border-radius: 10px;
+  background: #fff3c4;
+  color: #92400e;
+  border: 2px solid #fde68a;
+  font-size: 12px;
+  font-weight: 800;
+  padding: 8px 10px;
+}
 
 /* ===================================================
    ゲームエリア
@@ -249,6 +264,7 @@ body {
 
 <!-- ========== ヘッダー ========== -->
 <div id="header">
+  <button id="btn-title">タイトル</button>
   <div id="score-box">
     <div id="score-label">SCORE</div>
     <div id="score-display">0</div>
@@ -297,6 +313,7 @@ body {
 
   <button class="action-btn btn-primary" id="btn-save-score">登録してリトライ</button>
   <button class="action-btn btn-secondary" id="btn-retry">登録せずリトライ</button>
+  <button class="action-btn btn-secondary" id="btn-title-gameover">タイトルへ戻る</button>
 
   <div class="ranking-section">
     <div class="ranking-title">🏆 RANKING</div>
@@ -323,9 +340,9 @@ var CHARS = [
   { radius: 53,  img: 'images/char4.png', score:  150, color: '#c4b5fd', label: '⑤' },
   { radius: 63,  img: 'images/char5.png', score:  220, color: '#f9a8d4', label: '⑥' },
   { radius: 73,  img: 'images/char6.png', score:  300, color: '#fdba74', label: '⑦' },
-  { radius: 84,  img: 'images/char7.png', score:  420, color: '#a7f3d0', label: '⑧' },
-  { radius: 96,  img: 'images/char8.png', score:  600, color: '#fbcfe8', label: '⑨' },
-  { radius: 108, img: 'images/char9.png', score: 1200, color: '#f9a8d4', label: '⑩' },
+  { radius: 84,  img: '',                 score:  420, color: '#a7f3d0', label: '⑧' },
+  { radius: 96,  img: '',                 score:  600, color: '#fbcfe8', label: '⑨' },
+  { radius: 108, img: '',                 score: 1200, color: '#f9a8d4', label: '⑩' },
 ];
 var MAX_LEVEL = CHARS.length - 1; // 最大レベル（これ以上合体しない）
 
@@ -404,12 +421,30 @@ var gameLoopId    = null;
 var engineRunning = false;
 
 // ================================================================
-// ■ ランキング（localStorage使用）
+// ■ Firebase 設定
+//   window.FIREBASE_CONFIG があればそれを優先して利用
+// ================================================================
+var FIREBASE_CONFIG = window.FIREBASE_CONFIG || {
+  apiKey: '',
+  authDomain: '',
+  projectId: '',
+  databaseURL: 'https://kaigame-a0f24-default-rtdb.firebaseio.com',
+};
+var firebaseReady = false;
+var rtdb = null;
+
+if (window.firebase && FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.projectId && FIREBASE_CONFIG.databaseURL) {
+  firebase.initializeApp(FIREBASE_CONFIG);
+  rtdb = firebase.database();
+  firebaseReady = true;
+}
+
+// ================================================================
+// ■ ランキング（Firebase + localStorageフォールバック）
 // ================================================================
 var LS_KEY = 'charMergePuzzle_ranking_v1';
 
-/** ランキングを読み込む */
-function loadRanking() {
+function loadLocalRanking() {
   try {
     return JSON.parse(localStorage.getItem(LS_KEY)) || [];
   } catch(e) {
@@ -417,9 +452,41 @@ function loadRanking() {
   }
 }
 
+/** ランキングを読み込む */
+async function loadRanking() {
+  if (firebaseReady) {
+    try {
+      var snap = await rtdb.ref('rankings')
+        .orderByChild('score')
+        .limitToLast(10)
+        .once('value');
+      var rankingObj = snap.val() || {};
+      return Object.keys(rankingObj)
+        .map(function(key) { return rankingObj[key]; })
+        .sort(function(a, b) { return (b.score || 0) - (a.score || 0); });
+    } catch (e) {
+      console.warn('Firebase ranking load failed. localStorage fallback.', e);
+    }
+  }
+  return loadLocalRanking();
+}
+
 /** スコアを保存（上位10件のみ保持） */
-function saveScore(name, sc) {
-  var list = loadRanking();
+async function saveScore(name, sc) {
+  if (firebaseReady) {
+    try {
+      await rtdb.ref('rankings').push({
+        name: name,
+        score: sc,
+        date: new Date().toLocaleString('ja-JP', { hour12: false }),
+      });
+      return;
+    } catch (e) {
+      console.warn('Firebase ranking save failed. localStorage fallback.', e);
+    }
+  }
+
+  var list = loadLocalRanking();
   var now = new Date();
   var dateStr = (now.getMonth()+1) + '/' + now.getDate() + ' '
     + String(now.getHours()).padStart(2,'0') + ':'
@@ -432,11 +499,11 @@ function saveScore(name, sc) {
 }
 
 /** ランキングをUI要素に描画する */
-function renderRanking(listId) {
+async function renderRanking(listId) {
   var ul = document.getElementById(listId);
   if (!ul) return;
   ul.innerHTML = '';
-  var data = loadRanking();
+  var data = await loadRanking();
 
   if (data.length === 0) {
     var empty = document.createElement('li');
@@ -833,6 +900,18 @@ function triggerGameOver() {
   document.getElementById('overlay-gameover').classList.remove('hidden');
 }
 
+/** タイトルへ戻る（プレイ中/ゲームオーバー共通） */
+function returnToTitle() {
+  engineRunning = false;
+  if (gameLoopId) { cancelAnimationFrame(gameLoopId); gameLoopId = null; }
+  isGameOver = true;
+  isDragging = false;
+
+  renderRanking('ranking-list-start');
+  document.getElementById('overlay-gameover').classList.add('hidden');
+  document.getElementById('overlay-start').classList.remove('hidden');
+}
+
 // ================================================================
 // ■ メインループ
 // ================================================================
@@ -928,11 +1007,13 @@ btnDrop.addEventListener('touchstart', function(e) { e.preventDefault(); dropCha
 
 // スタートボタン
 document.getElementById('btn-start').addEventListener('click', startGame);
+document.getElementById('btn-title').addEventListener('click', returnToTitle);
+document.getElementById('btn-title-gameover').addEventListener('click', returnToTitle);
 
 // スコア登録してリトライ
-document.getElementById('btn-save-score').addEventListener('click', function() {
+document.getElementById('btn-save-score').addEventListener('click', async function() {
   var name = document.getElementById('player-name').value.trim() || '名無し';
-  if (score > 0) saveScore(name, score);
+  if (score > 0) await saveScore(name, score);
   document.getElementById('player-name').value = '';
   startGame();
 });
