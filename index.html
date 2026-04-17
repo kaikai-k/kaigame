@@ -9,7 +9,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
 <!-- Firebase CDN（ランキング共有用） -->
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 
 <style>
 /* ===================================================
@@ -428,13 +428,14 @@ var FIREBASE_CONFIG = window.FIREBASE_CONFIG || {
   apiKey: '',
   authDomain: '',
   projectId: '',
+  databaseURL: 'https://kaigame-a0f24-default-rtdb.firebaseio.com',
 };
 var firebaseReady = false;
-var db = null;
+var rtdb = null;
 
-if (window.firebase && FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.projectId) {
+if (window.firebase && FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.projectId && FIREBASE_CONFIG.databaseURL) {
   firebase.initializeApp(FIREBASE_CONFIG);
-  db = firebase.firestore();
+  rtdb = firebase.database();
   firebaseReady = true;
 }
 
@@ -455,11 +456,14 @@ function loadLocalRanking() {
 async function loadRanking() {
   if (firebaseReady) {
     try {
-      var snap = await db.collection('rankings')
-        .orderBy('score', 'desc')
-        .limit(10)
-        .get();
-      return snap.docs.map(function(doc) { return doc.data(); });
+      var snap = await rtdb.ref('rankings')
+        .orderByChild('score')
+        .limitToLast(10)
+        .once('value');
+      var rankingObj = snap.val() || {};
+      return Object.keys(rankingObj)
+        .map(function(key) { return rankingObj[key]; })
+        .sort(function(a, b) { return (b.score || 0) - (a.score || 0); });
     } catch (e) {
       console.warn('Firebase ranking load failed. localStorage fallback.', e);
     }
@@ -471,7 +475,7 @@ async function loadRanking() {
 async function saveScore(name, sc) {
   if (firebaseReady) {
     try {
-      await db.collection('rankings').add({
+      await rtdb.ref('rankings').push({
         name: name,
         score: sc,
         date: new Date().toLocaleString('ja-JP', { hour12: false }),
