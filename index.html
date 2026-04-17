@@ -1,0 +1,981 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>カイくんゲーム</title>
+
+<!-- Matter.js CDN（物理演算） -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+
+<style>
+/* ===================================================
+   リセット・基本
+=================================================== */
+* {
+  margin: 0; padding: 0;
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+body {
+  background: linear-gradient(160deg, #fffbe6 0%, #fff8d0 55%, #fef3c0 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  min-height: 100dvh;
+  font-family: 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', sans-serif;
+  overflow: hidden;
+}
+
+/* ===================================================
+   ヘッダー（スコア + NEXT）
+=================================================== */
+#header {
+  width: 100%;
+  max-width: 400px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 16px 6px;
+  background: #fff9e0;
+  border-bottom: 2px solid #fde68a;
+  box-shadow: 0 2px 8px rgba(253,186,20,0.18);
+}
+
+#score-box { text-align: center; }
+#score-label {
+  font-size: 10px; color: #b45309;
+  letter-spacing: 2px; font-weight: 700;
+}
+#score-display {
+  font-size: 30px; font-weight: 900; color: #d97706;
+  line-height: 1; text-shadow: 0 1px 0 rgba(255,255,255,0.8);
+}
+
+#next-box { text-align: center; }
+#next-label {
+  font-size: 10px; color: #b45309;
+  letter-spacing: 1px; font-weight: 700; margin-bottom: 2px;
+}
+#next-preview {
+  width: 44px; height: 44px;
+  display: flex; align-items: center; justify-content: center;
+  margin: 0 auto;
+  background: #fef9c3; border-radius: 50%;
+  border: 2px solid #fde68a;
+}
+#next-canvas { border-radius: 50%; }
+
+/* ===================================================
+   ゲームエリア
+=================================================== */
+#game-wrapper {
+  position: relative;
+  width: 100%; max-width: 400px;
+  flex: 1;
+  display: flex; flex-direction: column; align-items: center;
+  overflow: hidden;
+}
+#game-canvas {
+  display: block;
+  background: #fffde7;
+  border-left: 3px solid #fde68a;
+  border-right: 3px solid #fde68a;
+}
+
+/* ===================================================
+   操作ボタン
+=================================================== */
+#controls {
+  width: 100%; max-width: 400px;
+  display: flex; align-items: center;
+  padding: 8px 12px 14px; gap: 8px;
+  background: #fff9e0;
+  border-top: 2px solid #fde68a;
+}
+
+.ctrl-btn {
+  flex: 1; height: 62px; border: none; border-radius: 14px;
+  font-size: 22px; font-weight: 900; cursor: pointer;
+  transition: transform 0.08s, box-shadow 0.08s;
+  outline: none; display: flex; align-items: center; justify-content: center;
+  font-family: inherit;
+}
+.ctrl-btn:active { transform: scale(0.92); box-shadow: none !important; }
+
+#btn-left, #btn-right {
+  background: linear-gradient(145deg, #fde68a, #fbbf24);
+  color: #78350f; font-size: 28px;
+  box-shadow: 0 4px 12px rgba(251,191,36,0.5);
+  border: 2px solid #f59e0b;
+}
+#btn-drop {
+  flex: 2;
+  background: linear-gradient(145deg, #fb923c, #f97316);
+  color: white; font-size: 15px; font-weight: 900; letter-spacing: 3px;
+  box-shadow: 0 4px 16px rgba(249,115,22,0.45);
+  border: 2px solid #ea580c;
+}
+
+/* ===================================================
+   オーバーレイ（スタート / ゲームオーバー）
+=================================================== */
+.overlay {
+  position: fixed; inset: 0;
+  background: rgba(255, 251, 220, 0.94);
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: flex-start;
+  z-index: 100; backdrop-filter: blur(4px);
+  padding: 28px 20px 20px;
+  overflow-y: auto;
+}
+.overlay.hidden { display: none; }
+
+.overlay-title {
+  font-size: 34px; font-weight: 900; color: #d97706;
+  letter-spacing: 4px; margin-bottom: 4px;
+  text-shadow: 0 2px 0 rgba(255,255,255,0.9);
+}
+.overlay-sub {
+  font-size: 13px; color: #92400e;
+  margin-bottom: 20px; letter-spacing: 1px;
+}
+
+.final-score-label {
+  font-size: 11px; color: #b45309;
+  letter-spacing: 3px; font-weight: 700; margin-bottom: 2px;
+}
+.final-score {
+  font-size: 54px; font-weight: 900; color: #ea580c;
+  line-height: 1; margin-bottom: 20px;
+  text-shadow: 0 2px 0 rgba(255,255,255,0.8);
+}
+
+/* 名前入力 */
+#name-input-box {
+  display: flex; flex-direction: column; align-items: center;
+  gap: 6px; margin-bottom: 14px;
+  width: 100%; max-width: 280px;
+}
+#name-input-box label { font-size: 12px; color: #92400e; font-weight: 600; }
+#player-name {
+  width: 100%; padding: 10px 14px;
+  background: #fffbeb; border: 2px solid #fde68a; border-radius: 10px;
+  color: #78350f; font-size: 16px; text-align: center;
+  outline: none; font-family: inherit;
+}
+#player-name:focus {
+  border-color: #f59e0b;
+  box-shadow: 0 0 0 3px rgba(245,158,11,0.2);
+}
+
+/* アクションボタン */
+.action-btn {
+  padding: 13px 28px; border: none; border-radius: 12px;
+  font-size: 15px; font-weight: 900; cursor: pointer;
+  letter-spacing: 2px; transition: transform 0.1s; margin: 4px;
+  font-family: inherit;
+}
+.action-btn:active { transform: scale(0.95); }
+
+.btn-primary {
+  background: linear-gradient(145deg, #fb923c, #f97316);
+  color: white; box-shadow: 0 4px 14px rgba(249,115,22,0.4);
+  border: 2px solid #ea580c;
+}
+.btn-secondary {
+  background: #fff3c4; color: #92400e;
+  border: 2px solid #fde68a;
+}
+
+/* ===================================================
+   ランキング
+=================================================== */
+.ranking-section { width: 100%; max-width: 300px; margin-top: 16px; }
+.ranking-title {
+  font-size: 12px; color: #b45309; letter-spacing: 3px;
+  text-align: center; margin-bottom: 8px; font-weight: 900;
+}
+.ranking-list {
+  list-style: none; display: flex; flex-direction: column;
+  gap: 4px; max-height: 220px; overflow-y: auto;
+}
+.ranking-list li {
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 12px;
+  background: #fffbeb; border: 1px solid #fde68a;
+  border-radius: 10px; font-size: 13px; color: #78350f;
+}
+.ranking-list li.rank-gold   { background: #fef9c3; border-color: #fbbf24; }
+.ranking-list li.rank-silver { background: #f9fafb; border-color: #d1d5db; }
+.ranking-list li.rank-bronze { background: #fff7ed; border-color: #fdba74; }
+
+.rank-num   { font-size: 15px; font-weight: 900; min-width: 24px; }
+.rank-name  { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.rank-score { font-weight: 900; color: #ea580c; }
+.rank-date  { font-size: 10px; color: #a16207; white-space: nowrap; }
+
+/* ===================================================
+   エフェクト
+=================================================== */
+.merge-effect {
+  position: absolute; pointer-events: none; border-radius: 50%;
+  animation: mergeAnim 0.55s ease-out forwards; z-index: 50;
+}
+@keyframes mergeAnim {
+  0%   { transform: scale(0.4); opacity: 1; }
+  60%  { transform: scale(2.0); opacity: 0.65; }
+  100% { transform: scale(2.8); opacity: 0; }
+}
+
+.score-popup {
+  position: absolute; pointer-events: none;
+  font-size: 20px; font-weight: 900; color: #ea580c;
+  text-shadow: 0 1px 0 rgba(255,255,255,0.9);
+  animation: popupAnim 1s ease-out forwards; z-index: 60;
+  white-space: nowrap;
+}
+@keyframes popupAnim {
+  0%   { transform: translateY(0)    scale(1);    opacity: 1; }
+  70%  { transform: translateY(-44px) scale(1.15); opacity: 0.9; }
+  100% { transform: translateY(-65px) scale(0.8);  opacity: 0; }
+}
+</style>
+</head>
+<body>
+
+<!-- ========== ヘッダー ========== -->
+<div id="header">
+  <div id="score-box">
+    <div id="score-label">SCORE</div>
+    <div id="score-display">0</div>
+  </div>
+  <div id="next-box">
+    <div id="next-label">NEXT</div>
+    <div id="next-preview">
+      <canvas id="next-canvas" width="40" height="40"></canvas>
+    </div>
+  </div>
+</div>
+
+<!-- ========== ゲームエリア ========== -->
+<div id="game-wrapper">
+  <canvas id="game-canvas"></canvas>
+</div>
+
+<!-- ========== 操作ボタン ========== -->
+<div id="controls">
+  <button class="ctrl-btn" id="btn-left">←</button>
+  <button class="ctrl-btn" id="btn-drop">落とす</button>
+  <button class="ctrl-btn" id="btn-right">→</button>
+</div>
+
+<!-- ========== スタート画面 ========== -->
+<div class="overlay" id="overlay-start">
+  <div class="overlay-title">キャラ合体</div>
+  <div class="overlay-sub">同じキャラを合体させよう！</div>
+  <button class="action-btn btn-primary" id="btn-start">スタート ▶</button>
+  <div class="ranking-section">
+    <div class="ranking-title">🏆 RANKING</div>
+    <ul class="ranking-list" id="ranking-list-start"></ul>
+  </div>
+</div>
+
+<!-- ========== ゲームオーバー画面 ========== -->
+<div class="overlay hidden" id="overlay-gameover">
+  <div class="overlay-title">GAME OVER</div>
+  <div class="final-score-label">FINAL SCORE</div>
+  <div class="final-score" id="final-score-display">0</div>
+
+  <div id="name-input-box">
+    <label for="player-name">名前を入力してランキングに登録</label>
+    <input type="text" id="player-name" placeholder="プレイヤー名" maxlength="12">
+  </div>
+
+  <button class="action-btn btn-primary" id="btn-save-score">登録してリトライ</button>
+  <button class="action-btn btn-secondary" id="btn-retry">登録せずリトライ</button>
+
+  <div class="ranking-section">
+    <div class="ranking-title">🏆 RANKING</div>
+    <ul class="ranking-list" id="ranking-list-gameover"></ul>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+// ================================================================
+// ■ キャラクター設定
+//   radius : 物理ボディの半径（px）
+//   img    : 画像パス（imagesフォルダから読み込み）
+//   score  : 合体時に加算するスコア
+//   color  : 画像が読めない場合のフォールバック色（パステル系）
+//   label  : フォールバック時に表示するテキスト
+// ================================================================
+var CHARS = [
+  { radius: 18, img: 'images/char0.png', score:  10, color: '#fde68a', label: '①' },
+  { radius: 26, img: 'images/char1.png', score:  30, color: '#fca5a5', label: '②' },
+  { radius: 34, img: 'images/char2.png', score:  60, color: '#86efac', label: '③' },
+  { radius: 43, img: 'images/char3.png', score: 100, color: '#7dd3fc', label: '④' },
+  { radius: 53, img: 'images/char4.png', score: 150, color: '#c4b5fd', label: '⑤' },
+  { radius: 63, img: 'images/char5.png', score: 220, color: '#f9a8d4', label: '⑥' },
+  { radius: 73, img: 'images/char6.png', score: 300, color: '#fdba74', label: '⑦' },
+];
+var MAX_LEVEL = CHARS.length - 1; // 最大レベル（これ以上合体しない）
+
+// ================================================================
+// ■ ゲーム定数
+// ================================================================
+var CANVAS_W        = Math.min(window.innerWidth, 400);
+var CANVAS_H        = Math.floor(Math.min(window.innerHeight, 900) * 0.62);
+var WALL_T          = 20;   // 壁の厚さ
+var DANGER_Y        = 60;   // ゲームオーバー判定ライン（上端からの距離px）
+var DROP_X_INIT     = CANVAS_W / 2;
+var MOVE_STEP       = 18;   // 左右ボタン1回の移動量
+var MERGE_CD_MS     = 300;  // 合体後のクールダウン（ms）
+var NEW_BODY_FRAMES = 80;   // 新規ボディのゲームオーバー判定除外フレーム数
+var DANGER_FRAMES   = 90;   // 危険ライン超えをこのフレーム数続けるとゲームオーバー
+
+// ================================================================
+// ■ 画像キャッシュ（事前ロード）
+// ================================================================
+var imgCache = {};
+CHARS.forEach(function(c, i) {
+  var img = new Image();
+  img.src = c.img;
+  imgCache[i] = img;
+});
+
+// ================================================================
+// ■ Matter.js セットアップ
+// ================================================================
+var Engine    = Matter.Engine;
+var Bodies    = Matter.Bodies;
+var Body      = Matter.Body;
+var World     = Matter.World;
+var Events    = Matter.Events;
+var Composite = Matter.Composite;
+
+// 物理エンジン生成
+var engine = Engine.create({ gravity: { y: 2.0 } });
+var world  = engine.world;
+
+// Canvas 取得・サイズ設定
+var canvas   = document.getElementById('game-canvas');
+canvas.width  = CANVAS_W;
+canvas.height = CANVAS_H;
+var ctx = canvas.getContext('2d');
+
+// ================================================================
+// ■ 壁・床の生成（静的ボディ）
+// ================================================================
+World.add(world, [
+  // 床
+  Bodies.rectangle(CANVAS_W / 2, CANVAS_H + WALL_T / 2,
+    CANVAS_W, WALL_T, { isStatic: true, label: 'wall', friction: 0.5, restitution: 0.15 }),
+  // 左壁
+  Bodies.rectangle(-WALL_T / 2, CANVAS_H / 2,
+    WALL_T, CANVAS_H * 3, { isStatic: true, label: 'wall', friction: 0.3, restitution: 0.1 }),
+  // 右壁
+  Bodies.rectangle(CANVAS_W + WALL_T / 2, CANVAS_H / 2,
+    WALL_T, CANVAS_H * 3, { isStatic: true, label: 'wall', friction: 0.3, restitution: 0.1 }),
+]);
+
+// ================================================================
+// ■ ゲーム状態変数
+// ================================================================
+var score         = 0;
+var currentLevel  = 0;
+var nextLevel     = 0;
+var dropX         = DROP_X_INIT;
+var isDragging    = false;  // 落下中フラグ（true中は操作無効）
+var isGameOver    = false;
+var dangerTimer   = 0;
+var bodies        = [];     // [{body, level}] アクティブなキャラボディ一覧
+var mergeQueue    = [];     // 処理待ち合体ペア
+var mergeCooldown = {};     // {bodyId: true} 合体クールダウン中のID管理
+var gameLoopId    = null;
+var engineRunning = false;
+
+// ================================================================
+// ■ ランキング（localStorage使用）
+// ================================================================
+var LS_KEY = 'charMergePuzzle_ranking_v1';
+
+/** ランキングを読み込む */
+function loadRanking() {
+  try {
+    return JSON.parse(localStorage.getItem(LS_KEY)) || [];
+  } catch(e) {
+    return [];
+  }
+}
+
+/** スコアを保存（上位10件のみ保持） */
+function saveScore(name, sc) {
+  var list = loadRanking();
+  var now = new Date();
+  var dateStr = (now.getMonth()+1) + '/' + now.getDate() + ' '
+    + String(now.getHours()).padStart(2,'0') + ':'
+    + String(now.getMinutes()).padStart(2,'0');
+  list.push({ name: name, score: sc, date: dateStr });
+  // スコア降順でソートして上位10件のみ保存
+  list.sort(function(a, b) { return b.score - a.score; });
+  var top10 = list.slice(0, 10);
+  localStorage.setItem(LS_KEY, JSON.stringify(top10));
+}
+
+/** ランキングをUI要素に描画する */
+function renderRanking(listId) {
+  var ul = document.getElementById(listId);
+  if (!ul) return;
+  ul.innerHTML = '';
+  var data = loadRanking();
+
+  if (data.length === 0) {
+    var empty = document.createElement('li');
+    empty.style.cssText = 'justify-content:center; color:#b45309; font-size:13px;';
+    empty.textContent = 'まだ記録がありません';
+    ul.appendChild(empty);
+    return;
+  }
+
+  data.forEach(function(entry, i) {
+    var li = document.createElement('li');
+    if (i === 0) li.classList.add('rank-gold');
+    if (i === 1) li.classList.add('rank-silver');
+    if (i === 2) li.classList.add('rank-bronze');
+    var medals = ['🥇','🥈','🥉'];
+    var medal  = medals[i] || (i + 1) + '.';
+    li.innerHTML =
+      '<span class="rank-num">' + medal + '</span>'
+      + '<span class="rank-name">' + escapeHtml(entry.name || '名無し') + '</span>'
+      + '<span class="rank-score">' + (entry.score || 0) + '</span>'
+      + '<span class="rank-date">'  + escapeHtml(entry.date  || '') + '</span>';
+    ul.appendChild(li);
+  });
+}
+
+/** XSS対策 */
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ================================================================
+// ■ ユーティリティ
+// ================================================================
+
+/** 落下キャラのランダムレベル（上位3段階は出現しない） */
+function randomLevel() {
+  return Math.floor(Math.random() * Math.min(4, CHARS.length));
+}
+
+/** スコア表示を更新 */
+function updateScoreDisplay() {
+  document.getElementById('score-display').textContent = score;
+}
+
+/** NEXTプレビューキャンバスを描画 */
+function drawNextPreview(level) {
+  var nc   = document.getElementById('next-canvas');
+  var nctx = nc.getContext('2d');
+  nctx.clearRect(0, 0, 40, 40);
+  drawCharCircle(nctx, 20, 20, 18, level);
+}
+
+// ================================================================
+// ■ ボディ生成
+// ================================================================
+
+/**
+ * キャラクターの物理ボディを生成してワールドに追加する
+ * _isNew フラグで生成直後のゲームオーバー判定を一定フレーム除外する
+ */
+function createCharBody(x, y, level) {
+  var r    = CHARS[level].radius;
+  var body = Bodies.circle(x, y, r, {
+    restitution: 0.3,
+    friction:    0.5,
+    frictionAir: 0.01,
+    density:     0.002,
+    label: 'char',
+  });
+  body.gameLevel  = level;
+  body._isNew     = true;
+  body._newTimer  = NEW_BODY_FRAMES;
+  World.add(world, body);
+  bodies.push({ body: body, level: level });
+  return body;
+}
+
+// ================================================================
+// ■ 落下処理
+// ================================================================
+
+/** 現在のキャラクターを dropX から落下させる */
+function dropCharacter() {
+  if (isDragging || isGameOver) return;
+  isDragging = true;
+
+  var r = CHARS[currentLevel].radius;
+  var x = Math.max(r + WALL_T + 2, Math.min(dropX, CANVAS_W - r - WALL_T - 2));
+  var y = r + 4;
+
+  createCharBody(x, y, currentLevel);
+
+  // 次のキャラを準備
+  currentLevel = nextLevel;
+  nextLevel    = randomLevel();
+  drawNextPreview(nextLevel);
+
+  // 落下後、一定時間後に再操作可能にする
+  setTimeout(function() {
+    isDragging = false;
+    dropX      = DROP_X_INIT;
+  }, 480);
+}
+
+// ================================================================
+// ■ 合体処理
+// ================================================================
+
+/**
+ * 衝突開始イベント：同レベルのキャラが衝突したら合体キューに追加
+ *
+ * 多重合体防止のために以下を組み合わせる：
+ *   - _toRemove フラグ（同フレーム内の重複を防ぐ）
+ *   - mergeCooldown ハッシュ（クールダウン中のボディを除外）
+ */
+Events.on(engine, 'collisionStart', function(event) {
+  event.pairs.forEach(function(pair) {
+    var bA = pair.bodyA;
+    var bB = pair.bodyB;
+
+    // 両方キャラか確認
+    if (bA.label !== 'char' || bB.label !== 'char') return;
+    // 同レベルか確認
+    if (bA.gameLevel !== bB.gameLevel) return;
+    // 最大レベルは合体しない
+    if (bA.gameLevel >= MAX_LEVEL) return;
+    // クールダウン中は除外
+    if (mergeCooldown[bA.id] || mergeCooldown[bB.id]) return;
+    // 既に削除予定なら除外
+    if (bA._toRemove || bB._toRemove) return;
+
+    // 削除フラグ（同フレーム内の多重合体防止）
+    bA._toRemove = true;
+    bB._toRemove = true;
+    mergeCooldown[bA.id] = true;
+    mergeCooldown[bB.id] = true;
+
+    mergeQueue.push({ bodyA: bA, bodyB: bB });
+  });
+});
+
+/**
+ * 毎フレーム末尾で合体キューを処理する
+ * 衝突イベント内で World.remove を直接呼ぶと不具合が出るため、
+ * ループ内で安全なタイミングで処理する
+ */
+function processMergeQueue() {
+  if (mergeQueue.length === 0) return;
+
+  var queue  = mergeQueue.splice(0); // キューを取り出してクリア
+  var allBod = Composite.allBodies(world);
+
+  queue.forEach(function(item) {
+    var bA = item.bodyA;
+    var bB = item.bodyB;
+
+    // ワールドに両ボディが存在するか確認
+    if (allBod.indexOf(bA) === -1 || allBod.indexOf(bB) === -1) return;
+
+    var newLevel = bA.gameLevel + 1;
+    var midX = (bA.position.x + bB.position.x) / 2;
+    var midY = (bA.position.y + bB.position.y) / 2;
+
+    // 古いボディを削除
+    World.remove(world, bA);
+    World.remove(world, bB);
+    bodies = bodies.filter(function(b) { return b.body !== bA && b.body !== bB; });
+
+    // スコア加算
+    var gained = CHARS[newLevel].score;
+    score += gained;
+    updateScoreDisplay();
+
+    // エフェクト
+    showMergeEffect(midX, midY, newLevel);
+    showScorePopup(midX, midY, gained);
+
+    // 新しいボディ生成（少し上向き初速で演出）
+    var nb = createCharBody(midX, midY, newLevel);
+    Body.setVelocity(nb, { x: 0, y: -2.5 });
+
+    // クールダウン解除
+    setTimeout(function() {
+      delete mergeCooldown[bA.id];
+      delete mergeCooldown[bB.id];
+    }, MERGE_CD_MS);
+  });
+}
+
+// ================================================================
+// ■ エフェクト
+// ================================================================
+
+/** 合体時の光エフェクト */
+function showMergeEffect(x, y, level) {
+  var wrapper = document.getElementById('game-wrapper');
+  var el      = document.createElement('div');
+  el.className = 'merge-effect';
+  var d = CHARS[level].radius * 2;
+  el.style.cssText =
+    'left:' + (x - d/2) + 'px; top:' + (y - d/2) + 'px;'
+    + 'width:' + d + 'px; height:' + d + 'px;'
+    + 'background:radial-gradient(circle, ' + CHARS[level].color + 'dd, transparent);';
+  wrapper.appendChild(el);
+  setTimeout(function() { el.remove(); }, 600);
+}
+
+/** スコアポップアップ */
+function showScorePopup(x, y, gained) {
+  var wrapper = document.getElementById('game-wrapper');
+  var el      = document.createElement('div');
+  el.className  = 'score-popup';
+  el.textContent = '+' + gained;
+  el.style.cssText = 'left:' + (x - 22) + 'px; top:' + (y - 10) + 'px;';
+  wrapper.appendChild(el);
+  setTimeout(function() { el.remove(); }, 1100);
+}
+
+// ================================================================
+// ■ 描画ループ
+// ================================================================
+
+/**
+ * メイン描画処理（毎フレーム呼ばれる）
+ * Matter.js の Renderer は使わず、Canvas 2D API で自前描画する
+ */
+function drawGame() {
+  ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
+
+  // 背景：薄いクリーム色
+  ctx.fillStyle = '#fffde7';
+  ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+
+  // 背景装飾：ドット模様
+  ctx.fillStyle = 'rgba(253, 230, 138, 0.3)';
+  for (var gx = 0; gx < CANVAS_W; gx += 24) {
+    for (var gy = 0; gy < CANVAS_H; gy += 24) {
+      ctx.beginPath();
+      ctx.arc(gx, gy, 1.2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  // ゲームオーバー判定ライン（赤い点線）
+  ctx.strokeStyle = 'rgba(239, 68, 68, 0.45)';
+  ctx.lineWidth   = 1.5;
+  ctx.setLineDash([6, 5]);
+  ctx.beginPath();
+  ctx.moveTo(0,       DANGER_Y);
+  ctx.lineTo(CANVAS_W, DANGER_Y);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = 'rgba(220, 38, 38, 0.5)';
+  ctx.font      = 'bold 9px sans-serif';
+  ctx.textAlign = 'left';
+  ctx.fillText('▲ DANGER', 5, DANGER_Y - 4);
+
+  // 落下ガイドライン（落下待機中のみ表示）
+  if (!isDragging && !isGameOver) {
+    var r  = CHARS[currentLevel].radius;
+    var gx2 = Math.max(r + WALL_T + 2, Math.min(dropX, CANVAS_W - r - WALL_T - 2));
+
+    ctx.strokeStyle = 'rgba(251, 191, 36, 0.4)';
+    ctx.lineWidth   = 1.5;
+    ctx.setLineDash([4, 5]);
+    ctx.beginPath();
+    ctx.moveTo(gx2, 0);
+    ctx.lineTo(gx2, CANVAS_H);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // ガイド位置に半透明でキャラを表示
+    ctx.globalAlpha = 0.5;
+    drawCharCircle(ctx, gx2, r + 3, r, currentLevel);
+    ctx.globalAlpha = 1.0;
+  }
+
+  // 全キャラボディを描画
+  bodies.forEach(function(item) {
+    var bdy = item.body;
+    var lv  = item.level;
+    ctx.save();
+    ctx.translate(bdy.position.x, bdy.position.y);
+    ctx.rotate(bdy.angle);
+    drawCharCircle(ctx, 0, 0, CHARS[lv].radius, lv);
+    ctx.restore();
+  });
+}
+
+/**
+ * 指定した位置・半径でキャラを円形に描画する
+ * 画像がなければパステルカラー + テキストのフォールバックを表示
+ */
+function drawCharCircle(c, cx, cy, r, level) {
+  var char = CHARS[level];
+  var img  = imgCache[level];
+
+  // 円形クリップ
+  c.save();
+  c.beginPath();
+  c.arc(cx, cy, r, 0, Math.PI * 2);
+  c.clip();
+
+  if (img && img.complete && img.naturalWidth > 0) {
+    // 画像あり
+    c.drawImage(img, cx - r, cy - r, r * 2, r * 2);
+  } else {
+    // フォールバック：パステルカラー塗りつぶし
+    c.fillStyle = char.color;
+    c.fillRect(cx - r, cy - r, r * 2, r * 2);
+    c.fillStyle    = '#78350f';
+    c.font         = 'bold ' + Math.floor(r * 0.72) + 'px sans-serif';
+    c.textAlign    = 'center';
+    c.textBaseline = 'middle';
+    c.fillText(char.label, cx, cy);
+  }
+
+  c.restore();
+
+  // 光沢オーバーレイ
+  c.save();
+  c.beginPath();
+  c.arc(cx, cy, r, 0, Math.PI * 2);
+  var gloss = c.createRadialGradient(cx - r * 0.25, cy - r * 0.3, 0, cx, cy, r);
+  gloss.addColorStop(0,   'rgba(255,255,255,0.38)');
+  gloss.addColorStop(0.5, 'rgba(255,255,255,0.06)');
+  gloss.addColorStop(1,   'rgba(0,0,0,0.08)');
+  c.fillStyle = gloss;
+  c.fill();
+  c.restore();
+
+  // 縁取り
+  c.beginPath();
+  c.arc(cx, cy, r, 0, Math.PI * 2);
+  c.strokeStyle = 'rgba(255,255,255,0.55)';
+  c.lineWidth   = 2;
+  c.stroke();
+}
+
+// ================================================================
+// ■ 新規ボディの _isNew タイマー処理
+//   生成直後のボディは DANGER_Y チェックから除外する
+// ================================================================
+Events.on(engine, 'afterUpdate', function() {
+  bodies.forEach(function(item) {
+    var b = item.body;
+    if (b._newTimer > 0) {
+      b._newTimer--;
+      if (b._newTimer <= 0) {
+        b._isNew = false;
+      }
+    }
+  });
+});
+
+// ================================================================
+// ■ ゲームオーバー判定
+// ================================================================
+
+/** 毎フレーム呼ぶ。危険ラインを超え続けたらゲームオーバー */
+function checkGameOver() {
+  var overLine = false;
+  bodies.forEach(function(item) {
+    var b = item.body;
+    if (b._isNew) return;
+    if (b.position.y - CHARS[b.gameLevel].radius < DANGER_Y) {
+      overLine = true;
+    }
+  });
+
+  if (overLine) {
+    dangerTimer++;
+    if (dangerTimer >= DANGER_FRAMES) {
+      triggerGameOver();
+    }
+  } else {
+    dangerTimer = 0;
+  }
+}
+
+/** ゲームオーバー処理 */
+function triggerGameOver() {
+  if (isGameOver) return;
+  isGameOver = true;
+
+  document.getElementById('final-score-display').textContent = score;
+  renderRanking('ranking-list-gameover'); // ゲームオーバー時のランキング表示
+  document.getElementById('overlay-gameover').classList.remove('hidden');
+}
+
+// ================================================================
+// ■ メインループ
+// ================================================================
+function gameLoop() {
+  if (!engineRunning) return;
+  Engine.update(engine, 1000 / 60); // 物理演算を1フレーム進める
+  processMergeQueue();               // 合体キューを処理
+  if (!isGameOver) checkGameOver();  // ゲームオーバー判定
+  drawGame();                        // 描画
+  gameLoopId = requestAnimationFrame(gameLoop);
+}
+
+// ================================================================
+// ■ ゲーム開始・リセット
+// ================================================================
+function startGame() {
+  // 前回のループを止める
+  engineRunning = false;
+  if (gameLoopId) { cancelAnimationFrame(gameLoopId); gameLoopId = null; }
+
+  // ワールドのキャラボディを全削除（壁は残す）
+  Composite.allBodies(world).forEach(function(b) {
+    if (b.label !== 'wall') World.remove(world, b);
+  });
+
+  // 状態リセット
+  bodies        = [];
+  mergeQueue    = [];
+  mergeCooldown = {};
+  score         = 0;
+  isGameOver    = false;
+  isDragging    = false;
+  dangerTimer   = 0;
+  dropX         = DROP_X_INIT;
+
+  // レベル初期設定
+  currentLevel = randomLevel();
+  nextLevel    = randomLevel();
+  updateScoreDisplay();
+  drawNextPreview(nextLevel);
+
+  // オーバーレイを隠す
+  document.getElementById('overlay-start').classList.add('hidden');
+  document.getElementById('overlay-gameover').classList.add('hidden');
+
+  // ループ開始
+  engineRunning = true;
+  gameLoop();
+}
+
+// ================================================================
+// ■ ボタン操作イベント
+// ================================================================
+
+/* 左右ボタン（長押しで連続移動） */
+var moveInterval = null;
+
+function startMove(dir) {
+  if (isGameOver || isDragging) return;
+  moveStep(dir);
+  moveInterval = setInterval(function() { moveStep(dir); }, 80);
+}
+function moveStep(dir) {
+  var r = CHARS[currentLevel].radius;
+  dropX = Math.max(r + WALL_T + 2,
+    Math.min(dropX + dir * MOVE_STEP, CANVAS_W - r - WALL_T - 2));
+}
+function stopMove() {
+  clearInterval(moveInterval);
+  moveInterval = null;
+}
+
+// 左ボタン
+var btnL = document.getElementById('btn-left');
+btnL.addEventListener('mousedown',  function() { startMove(-1); });
+btnL.addEventListener('touchstart', function(e) { e.preventDefault(); startMove(-1); }, { passive: false });
+btnL.addEventListener('mouseup',    stopMove);
+btnL.addEventListener('touchend',   stopMove);
+btnL.addEventListener('mouseleave', stopMove);
+
+// 右ボタン
+var btnR = document.getElementById('btn-right');
+btnR.addEventListener('mousedown',  function() { startMove(1); });
+btnR.addEventListener('touchstart', function(e) { e.preventDefault(); startMove(1); }, { passive: false });
+btnR.addEventListener('mouseup',    stopMove);
+btnR.addEventListener('touchend',   stopMove);
+btnR.addEventListener('mouseleave', stopMove);
+
+// 落とすボタン
+var btnDrop = document.getElementById('btn-drop');
+btnDrop.addEventListener('click', dropCharacter);
+btnDrop.addEventListener('touchstart', function(e) { e.preventDefault(); dropCharacter(); }, { passive: false });
+
+// スタートボタン
+document.getElementById('btn-start').addEventListener('click', startGame);
+
+// スコア登録してリトライ
+document.getElementById('btn-save-score').addEventListener('click', function() {
+  var name = document.getElementById('player-name').value.trim() || '名無し';
+  if (score > 0) saveScore(name, score);
+  document.getElementById('player-name').value = '';
+  startGame();
+});
+
+// 登録せずリトライ
+document.getElementById('btn-retry').addEventListener('click', function() {
+  document.getElementById('player-name').value = '';
+  startGame();
+});
+
+// ================================================================
+// ■ キャンバスのタッチ操作（スワイプで位置調整 / タップで落下）
+// ================================================================
+var touchStartX = 0;
+var touchMoved  = false;
+
+canvas.addEventListener('touchstart', function(e) {
+  touchStartX = e.touches[0].clientX;
+  touchMoved  = false;
+}, { passive: true });
+
+canvas.addEventListener('touchmove', function(e) {
+  if (isDragging || isGameOver) return;
+  e.preventDefault();
+  var dx = e.touches[0].clientX - touchStartX;
+  touchStartX = e.touches[0].clientX;
+  var r = CHARS[currentLevel].radius;
+  dropX = Math.max(r + WALL_T + 2,
+    Math.min(dropX + dx, CANVAS_W - r - WALL_T - 2));
+  touchMoved = true;
+}, { passive: false });
+
+canvas.addEventListener('touchend', function() {
+  // スワイプでなくタップのみ落下
+  if (!touchMoved) dropCharacter();
+  touchMoved = false;
+});
+
+// ================================================================
+// ■ 初期描画とスタート画面ランキング表示
+// ================================================================
+ctx.fillStyle = '#fffde7';
+ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+ctx.fillStyle = 'rgba(180, 83, 9, 0.45)';
+ctx.font      = '17px sans-serif';
+ctx.textAlign = 'center';
+ctx.fillText('スタートボタンを押してね！', CANVAS_W / 2, CANVAS_H / 2);
+
+renderRanking('ranking-list-start'); // スタート画面でもランキング表示
+
+</script>
+</body>
+</html>
