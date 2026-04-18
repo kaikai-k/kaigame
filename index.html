@@ -42,6 +42,7 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 8px;
   padding: 8px 16px 6px;
   background: #fff9e0;
   border-bottom: 2px solid #fde68a;
@@ -99,6 +100,60 @@ body {
   background: #fffde7;
   border-left: 3px solid #fde68a;
   border-right: 3px solid #fde68a;
+}
+
+#btn-help {
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  border: 2px solid #16a34a;
+  border-radius: 999px;
+  background: linear-gradient(145deg, #dcfce7, #bbf7d0);
+  color: #166534;
+  font-size: 16px;
+  font-weight: 900;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 10px rgba(22, 101, 52, 0.25);
+}
+#btn-help:active { transform: scale(0.94); }
+
+.help-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 95;
+  background: rgba(255, 255, 255, 0.92);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 16px;
+}
+.help-overlay.hidden { display: none; }
+
+#help-title {
+  font-size: 16px;
+  font-weight: 900;
+  color: #166534;
+  letter-spacing: 1px;
+}
+#help-canvas {
+  width: min(90vw, 340px);
+  height: min(90vw, 340px);
+  max-width: 340px;
+  max-height: 340px;
+}
+#btn-help-close {
+  border: 2px solid #16a34a;
+  border-radius: 10px;
+  padding: 8px 16px;
+  background: #dcfce7;
+  color: #166534;
+  font-weight: 700;
+  font-size: 13px;
 }
 
 /* ===================================================
@@ -275,10 +330,16 @@ body {
       <canvas id="next-canvas" width="40" height="40"></canvas>
     </div>
   </div>
+  <button id="btn-help" aria-label="シンカの輪を表示">❓</button>
 </div>
 
 <!-- ========== ゲームエリア ========== -->
 <div id="game-wrapper">
+  <div class="help-overlay hidden" id="overlay-help">
+    <div id="help-title">シンカの輪</div>
+    <canvas id="help-canvas" width="340" height="340"></canvas>
+    <button id="btn-help-close">とじる</button>
+  </div>
   <canvas id="game-canvas"></canvas>
 </div>
 
@@ -571,6 +632,102 @@ function drawNextPreview(level) {
   setupNextCanvas(nc, nctx);
   nctx.clearRect(0, 0, 40, 40);
   drawCharCircle(nctx, 20, 20, 18, level);
+}
+
+/** シンカの輪ヘルプを描画 */
+function drawHelpWheel() {
+  var hc = document.getElementById('help-canvas');
+  if (!hc) return;
+  var hctx = hc.getContext('2d');
+  var size = 340;
+  hc.style.width = size + 'px';
+  hc.style.height = size + 'px';
+  hc.width = Math.floor(size * DPR);
+  hc.height = Math.floor(size * DPR);
+  hctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  hctx.clearRect(0, 0, size, size);
+
+  var cx = size / 2;
+  var cy = size / 2;
+  var ringR = 116;
+  var ringW = 34;
+
+  // ベースリング
+  hctx.strokeStyle = '#dcfce7';
+  hctx.lineWidth = ringW + 10;
+  hctx.lineCap = 'round';
+  hctx.beginPath();
+  hctx.arc(cx, cy, ringR, 0, Math.PI * 2);
+  hctx.stroke();
+
+  // 矢印風リング（時計回り）
+  var grad = hctx.createLinearGradient(40, 50, 300, 300);
+  grad.addColorStop(0, '#22c55e');
+  grad.addColorStop(0.5, '#84cc16');
+  grad.addColorStop(1, '#eab308');
+  hctx.strokeStyle = grad;
+  hctx.lineWidth = ringW;
+  hctx.lineCap = 'round';
+  hctx.beginPath();
+  hctx.arc(cx, cy, ringR, -Math.PI / 2, Math.PI * 1.82);
+  hctx.stroke();
+
+  // 最後の大きな矢印（進行方向）
+  var headAngle = Math.PI * 1.82;
+  var hx = cx + Math.cos(headAngle) * ringR;
+  var hy = cy + Math.sin(headAngle) * ringR;
+  hctx.save();
+  hctx.translate(hx, hy);
+  hctx.rotate(headAngle + Math.PI / 2);
+  hctx.fillStyle = '#22c55e';
+  hctx.beginPath();
+  hctx.moveTo(0, 20);
+  hctx.lineTo(17, -16);
+  hctx.lineTo(-17, -16);
+  hctx.closePath();
+  hctx.fill();
+  hctx.restore();
+
+  // 各キャラ間の小矢印
+  for (var j = 0; j < 10; j++) {
+    var midA = -Math.PI / 2 + (Math.PI * 2 * (j + 0.5)) / 10;
+    var mx = cx + Math.cos(midA) * ringR;
+    var my = cy + Math.sin(midA) * ringR;
+    hctx.save();
+    hctx.translate(mx, my);
+    hctx.rotate(midA + Math.PI / 2);
+    hctx.fillStyle = '#65a30d';
+    hctx.beginPath();
+    hctx.moveTo(0, 8);
+    hctx.lineTo(8, -6);
+    hctx.lineTo(-8, -6);
+    hctx.closePath();
+    hctx.fill();
+    hctx.restore();
+  }
+
+  // 顔アイコン配置
+  var levels = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+  levels.forEach(function(level, i) {
+    var a = -Math.PI / 2 + (Math.PI * 2 * i) / levels.length;
+    var x = cx + Math.cos(a) * ringR;
+    var y = cy + Math.sin(a) * ringR;
+    drawCharCircle(hctx, x, y, 24, level);
+    hctx.fillStyle = '#166534';
+    hctx.font = 'bold 11px sans-serif';
+    hctx.textAlign = 'center';
+    hctx.textBaseline = 'top';
+    hctx.fillText('char' + level, x, y + 27);
+  });
+
+  // 始点の案内
+  var startX = cx;
+  var startY = cy - ringR - 48;
+  hctx.fillStyle = '#15803d';
+  hctx.font = '900 13px sans-serif';
+  hctx.textAlign = 'center';
+  hctx.textBaseline = 'middle';
+  hctx.fillText('START: char0', startX, startY);
 }
 
 /** NEXTプレビューを高DPI向けに初期化 */
@@ -1036,6 +1193,19 @@ btnDrop.addEventListener('touchstart', function(e) { e.preventDefault(); dropCha
 document.getElementById('btn-start').addEventListener('click', startGame);
 document.getElementById('btn-title').addEventListener('click', returnToTitle);
 document.getElementById('btn-title-gameover').addEventListener('click', returnToTitle);
+
+// ヘルプ表示
+var helpOverlay = document.getElementById('overlay-help');
+document.getElementById('btn-help').addEventListener('click', function() {
+  drawHelpWheel();
+  helpOverlay.classList.remove('hidden');
+});
+document.getElementById('btn-help-close').addEventListener('click', function() {
+  helpOverlay.classList.add('hidden');
+});
+helpOverlay.addEventListener('click', function(e) {
+  if (e.target === helpOverlay) helpOverlay.classList.add('hidden');
+});
 
 // スコア登録してリトライ
 document.getElementById('btn-save-score').addEventListener('click', async function() {
