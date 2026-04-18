@@ -101,6 +101,80 @@ body {
   border-right: 3px solid #fde68a;
 }
 
+#btn-help {
+  position: absolute;
+  right: 10px;
+  top: 10px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 2px solid #f59e0b;
+  background: rgba(255, 255, 255, 0.92);
+  color: #b45309;
+  font-size: 20px;
+  font-weight: 900;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#help-panel {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  background: rgba(255, 251, 220, 0.94);
+  backdrop-filter: blur(2px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 12px;
+}
+#help-panel.hidden { display: none; }
+#help-title {
+  font-size: 13px;
+  color: #92400e;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+#help-wheel {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.help-node {
+  width: 58px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.help-node canvas {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: 2px solid #fde68a;
+  background: #fffde7;
+}
+.help-lv {
+  font-size: 10px;
+  color: #92400e;
+  font-weight: 700;
+}
+.help-arrow {
+  color: #d97706;
+  font-size: 14px;
+  margin-top: -8px;
+}
+#btn-help-close {
+  min-width: 110px;
+}
+
 /* ===================================================
    操作ボタン
 =================================================== */
@@ -280,6 +354,12 @@ body {
 <!-- ========== ゲームエリア ========== -->
 <div id="game-wrapper">
   <canvas id="game-canvas"></canvas>
+  <button id="btn-help" aria-label="進化ヘルプ">❓</button>
+  <div id="help-panel" class="hidden">
+    <div id="help-title">シンカの輪（同じキャラ同士で進化）</div>
+    <div id="help-wheel"></div>
+    <button class="action-btn btn-secondary" id="btn-help-close">とじる</button>
+  </div>
 </div>
 
 <!-- ========== 操作ボタン ========== -->
@@ -648,6 +728,46 @@ function setupNextCanvas(nc, nctx) {
   nctx.setTransform(DPR, 0, 0, DPR, 0, 0);
   nctx.imageSmoothingEnabled = true;
   nctx.imageSmoothingQuality = 'high';
+}
+
+/** ヘルプパネルの進化ホイールを描画 */
+function renderHelpWheel() {
+  var wheel = document.getElementById('help-wheel');
+  if (!wheel || wheel.dataset.rendered === '1') return;
+
+  CHARS.forEach(function(_, level) {
+    var node = document.createElement('div');
+    node.className = 'help-node';
+
+    var cv = document.createElement('canvas');
+    var csize = 42;
+    cv.width = Math.floor(csize * DPR);
+    cv.height = Math.floor(csize * DPR);
+    cv.style.width = csize + 'px';
+    cv.style.height = csize + 'px';
+    var cctx = cv.getContext('2d');
+    cctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    cctx.imageSmoothingEnabled = true;
+    cctx.imageSmoothingQuality = 'high';
+    drawCharCircle(cctx, csize / 2, csize / 2, 18, level);
+
+    var lv = document.createElement('div');
+    lv.className = 'help-lv';
+    lv.textContent = CHARS[level].label;
+
+    node.appendChild(cv);
+    node.appendChild(lv);
+    wheel.appendChild(node);
+
+    if (level < MAX_LEVEL) {
+      var arrow = document.createElement('div');
+      arrow.className = 'help-arrow';
+      arrow.textContent = '▶';
+      wheel.appendChild(arrow);
+    }
+  });
+
+  wheel.dataset.rendered = '1';
 }
 
 // ================================================================
@@ -1101,6 +1221,16 @@ btnDrop.addEventListener('touchstart', function(e) { e.preventDefault(); dropCha
 document.getElementById('btn-start').addEventListener('click', startGame);
 document.getElementById('btn-title').addEventListener('click', returnToTitle);
 document.getElementById('btn-title-gameover').addEventListener('click', returnToTitle);
+
+// ヘルプ表示
+var helpPanel = document.getElementById('help-panel');
+document.getElementById('btn-help').addEventListener('click', function() {
+  renderHelpWheel();
+  helpPanel.classList.remove('hidden');
+});
+document.getElementById('btn-help-close').addEventListener('click', function() {
+  helpPanel.classList.add('hidden');
+});
 
 // スコア登録してリトライ
 document.getElementById('btn-save-score').addEventListener('click', async function() {
