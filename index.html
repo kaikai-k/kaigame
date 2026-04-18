@@ -39,8 +39,9 @@ body {
 #header {
   width: 100%;
   max-width: 400px;
+  position: relative;
   display: flex;
-  justify-content: flex-start;
+  justify-content: space-between;
   align-items: center;
   gap: 8px;
   padding: 8px 16px 6px;
@@ -49,7 +50,12 @@ body {
   box-shadow: 0 2px 8px rgba(253,186,20,0.18);
 }
 
-#score-box { text-align: center; }
+#score-box {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  text-align: center;
+}
 #score-label {
   font-size: 10px; color: #b45309;
   letter-spacing: 2px; font-weight: 700;
@@ -154,6 +160,16 @@ body {
   height: min(90vw, 340px);
   max-width: 340px;
   max-height: 340px;
+}
+#help-wheel-image {
+  width: min(90vw, 340px);
+  height: auto;
+  max-width: 340px;
+  display: block;
+}
+#help-wheel-note {
+  font-size: 12px;
+  color: #166534;
 }
 #btn-help-close {
   border: 2px solid #16a34a;
@@ -348,7 +364,8 @@ body {
 <div id="game-wrapper">
   <div class="help-overlay hidden" id="overlay-help">
     <div id="help-title">シンカの輪</div>
-    <canvas id="help-canvas" width="340" height="340"></canvas>
+    <img id="help-wheel-image" alt="シンカの輪">
+    <div id="help-wheel-note"></div>
     <button id="btn-help-close">とじる</button>
   </div>
   <canvas id="game-canvas"></canvas>
@@ -431,6 +448,7 @@ var MOVE_STEP       = 18;   // 左右ボタン1回の移動量
 var MERGE_CD_MS     = 300;  // 合体後のクールダウン（ms）
 var NEW_BODY_FRAMES = 80;   // 新規ボディのゲームオーバー判定除外フレーム数
 var DANGER_FRAMES   = 90;   // 危険ライン超えをこのフレーム数続けるとゲームオーバー
+var HELP_WHEEL_IMAGE_URL = window.HELP_WHEEL_IMAGE_URL || 'images/shinka-ring.png';
 
 // ================================================================
 // ■ 画像キャッシュ（事前ロード）
@@ -645,81 +663,21 @@ function drawNextPreview(level) {
   drawCharCircle(nctx, 20, 20, 18, level);
 }
 
-/** シンカの輪ヘルプを描画 */
-function drawHelpWheel() {
-  var hc = document.getElementById('help-canvas');
-  if (!hc) return;
-  var hctx = hc.getContext('2d');
-  var size = 340;
-  hc.style.width = size + 'px';
-  hc.style.height = size + 'px';
-  hc.width = Math.floor(size * DPR);
-  hc.height = Math.floor(size * DPR);
-  hctx.setTransform(DPR, 0, 0, DPR, 0, 0);
-  hctx.clearRect(0, 0, size, size);
-
-  var cx = size / 2;
-  var cy = size / 2;
-  var outerR = 138;
-  var innerR = 72;
-  var midR = (outerR + innerR) / 2;
-
-  // ドーナツリング（画像に近い色味）
-  hctx.save();
-  hctx.beginPath();
-  hctx.arc(cx, cy, outerR, 0, Math.PI * 2);
-  hctx.arc(cx, cy, innerR, 0, Math.PI * 2, true);
-  hctx.closePath();
-  hctx.clip();
-
-  var grad = hctx.createLinearGradient(cx - 120, cy - 130, cx + 120, cy + 120);
-  grad.addColorStop(0, '#38bdf8');
-  grad.addColorStop(0.02, '#16a34a');
-  grad.addColorStop(0.4, '#84cc16');
-  grad.addColorStop(1, '#facc15');
-  hctx.fillStyle = grad;
-  hctx.fillRect(cx - outerR - 20, cy - outerR - 20, (outerR + 20) * 2, (outerR + 20) * 2);
-  hctx.restore();
-
-  // 一体感を出すための薄いハイライト
-  var glow = hctx.createRadialGradient(cx + 26, cy - 18, 30, cx + 26, cy - 18, 170);
-  glow.addColorStop(0, 'rgba(255,255,255,0.28)');
-  glow.addColorStop(1, 'rgba(255,255,255,0)');
-  hctx.fillStyle = glow;
-  hctx.beginPath();
-  hctx.arc(cx, cy, outerR, 0, Math.PI * 2);
-  hctx.arc(cx, cy, innerR, 0, Math.PI * 2, true);
-  hctx.closePath();
-  hctx.fill();
-
-  // 左上の太い矢印ヘッド
-  var ah = -Math.PI * 0.75;
-  var tipX = cx + Math.cos(ah) * (outerR + 10);
-  var tipY = cy + Math.sin(ah) * (outerR + 10);
-  var leftX = cx + Math.cos(ah + 0.42) * (midR - 8);
-  var leftY = cy + Math.sin(ah + 0.42) * (midR - 8);
-  var rightX = cx + Math.cos(ah - 0.42) * (midR + 4);
-  var rightY = cy + Math.sin(ah - 0.42) * (midR + 4);
-  hctx.fillStyle = '#4dbb45';
-  hctx.beginPath();
-  hctx.moveTo(tipX, tipY);
-  hctx.lineTo(leftX, leftY);
-  hctx.lineTo(rightX, rightY);
-  hctx.closePath();
-  hctx.fill();
-
-  // 顔アイコン配置（参考画像に合わせてリング内側寄り）
-  var levels = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
-  var startA = -Math.PI * 0.16;
-  var sweepA = Math.PI * 1.62;
-  var faceR = midR + 1;
-  levels.forEach(function(level, i) {
-    var t = i / (levels.length - 1);
-    var a = startA + sweepA * t;
-    var x = cx + Math.cos(a) * faceR;
-    var y = cy + Math.sin(a) * faceR;
-    drawCharCircle(hctx, x, y, 22, level);
-  });
+/** シンカの輪ヘルプ画像をセット */
+function setHelpWheelImage() {
+  var helpImg = document.getElementById('help-wheel-image');
+  var note = document.getElementById('help-wheel-note');
+  if (!helpImg) return;
+  var url = HELP_WHEEL_IMAGE_URL;
+  if (url) {
+    helpImg.src = url;
+    helpImg.style.display = 'block';
+    if (note) note.textContent = '';
+  } else {
+    helpImg.removeAttribute('src');
+    helpImg.style.display = 'none';
+    if (note) note.textContent = 'HELP_WHEEL_IMAGE_URL に画像URLを設定してください';
+  }
 }
 
 /** NEXTプレビューを高DPI向けに初期化 */
@@ -1189,7 +1147,7 @@ document.getElementById('btn-title-gameover').addEventListener('click', returnTo
 // ヘルプ表示
 var helpOverlay = document.getElementById('overlay-help');
 document.getElementById('btn-help').addEventListener('click', function() {
-  drawHelpWheel();
+  setHelpWheelImage();
   helpOverlay.classList.remove('hidden');
 });
 document.getElementById('btn-help-close').addEventListener('click', function() {
