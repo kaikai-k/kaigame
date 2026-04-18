@@ -42,6 +42,7 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 8px;
   padding: 8px 16px 6px;
   background: #fff9e0;
   border-bottom: 2px solid #fde68a;
@@ -102,23 +103,20 @@ body {
 }
 
 #btn-help {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  width: 40px;
-  height: 40px;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
   border: 2px solid #16a34a;
   border-radius: 999px;
   background: linear-gradient(145deg, #dcfce7, #bbf7d0);
   color: #166534;
-  font-size: 22px;
+  font-size: 16px;
   font-weight: 900;
   line-height: 1;
   display: flex;
   align-items: center;
   justify-content: center;
   box-shadow: 0 4px 10px rgba(22, 101, 52, 0.25);
-  z-index: 30;
 }
 #btn-help:active { transform: scale(0.94); }
 
@@ -332,11 +330,11 @@ body {
       <canvas id="next-canvas" width="40" height="40"></canvas>
     </div>
   </div>
+  <button id="btn-help" aria-label="シンカの輪を表示">❓</button>
 </div>
 
 <!-- ========== ゲームエリア ========== -->
 <div id="game-wrapper">
-  <button id="btn-help" aria-label="シンカの輪を表示">❓</button>
   <div class="help-overlay hidden" id="overlay-help">
     <div id="help-title">シンカの輪</div>
     <canvas id="help-canvas" width="340" height="340"></canvas>
