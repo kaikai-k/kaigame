@@ -101,6 +101,63 @@ body {
   border-right: 3px solid #fde68a;
 }
 
+#btn-help {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 40px;
+  height: 40px;
+  border: 2px solid #16a34a;
+  border-radius: 999px;
+  background: linear-gradient(145deg, #dcfce7, #bbf7d0);
+  color: #166534;
+  font-size: 22px;
+  font-weight: 900;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 10px rgba(22, 101, 52, 0.25);
+  z-index: 30;
+}
+#btn-help:active { transform: scale(0.94); }
+
+.help-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 95;
+  background: rgba(255, 255, 255, 0.92);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 16px;
+}
+.help-overlay.hidden { display: none; }
+
+#help-title {
+  font-size: 16px;
+  font-weight: 900;
+  color: #166534;
+  letter-spacing: 1px;
+}
+#help-canvas {
+  width: min(90vw, 340px);
+  height: min(90vw, 340px);
+  max-width: 340px;
+  max-height: 340px;
+}
+#btn-help-close {
+  border: 2px solid #16a34a;
+  border-radius: 10px;
+  padding: 8px 16px;
+  background: #dcfce7;
+  color: #166534;
+  font-weight: 700;
+  font-size: 13px;
+}
+
 /* ===================================================
    操作ボタン
 =================================================== */
@@ -279,6 +336,12 @@ body {
 
 <!-- ========== ゲームエリア ========== -->
 <div id="game-wrapper">
+  <button id="btn-help" aria-label="シンカの輪を表示">❓</button>
+  <div class="help-overlay hidden" id="overlay-help">
+    <div id="help-title">シンカの輪</div>
+    <canvas id="help-canvas" width="340" height="340"></canvas>
+    <button id="btn-help-close">とじる</button>
+  </div>
   <canvas id="game-canvas"></canvas>
 </div>
 
@@ -571,6 +634,59 @@ function drawNextPreview(level) {
   setupNextCanvas(nc, nctx);
   nctx.clearRect(0, 0, 40, 40);
   drawCharCircle(nctx, 20, 20, 18, level);
+}
+
+/** シンカの輪ヘルプを描画 */
+function drawHelpWheel() {
+  var hc = document.getElementById('help-canvas');
+  if (!hc) return;
+  var hctx = hc.getContext('2d');
+  var size = 340;
+  hc.style.width = size + 'px';
+  hc.style.height = size + 'px';
+  hc.width = Math.floor(size * DPR);
+  hc.height = Math.floor(size * DPR);
+  hctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  hctx.clearRect(0, 0, size, size);
+
+  var cx = size / 2;
+  var cy = size / 2;
+  var ringR = 118;
+  var ringW = 54;
+
+  // リング
+  var grad = hctx.createLinearGradient(60, 40, 300, 320);
+  grad.addColorStop(0, '#4ade80');
+  grad.addColorStop(0.6, '#bef264');
+  grad.addColorStop(1, '#facc15');
+  hctx.strokeStyle = grad;
+  hctx.lineWidth = ringW;
+  hctx.lineCap = 'round';
+  hctx.beginPath();
+  hctx.arc(cx, cy, ringR, -Math.PI * 0.95, Math.PI * 1.52);
+  hctx.stroke();
+
+  // 先端の矢印
+  hctx.save();
+  hctx.translate(cx - 60, cy - 122);
+  hctx.rotate(-0.8);
+  hctx.fillStyle = '#4ade80';
+  hctx.beginPath();
+  hctx.moveTo(-18, -8);
+  hctx.lineTo(25, 0);
+  hctx.lineTo(-18, 8);
+  hctx.closePath();
+  hctx.fill();
+  hctx.restore();
+
+  // 顔アイコン配置
+  var levels = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+  levels.forEach(function(level, i) {
+    var a = -Math.PI / 2 + (Math.PI * 2 * i) / levels.length;
+    var x = cx + Math.cos(a) * ringR;
+    var y = cy + Math.sin(a) * ringR;
+    drawCharCircle(hctx, x, y, 24, level);
+  });
 }
 
 /** NEXTプレビューを高DPI向けに初期化 */
@@ -1036,6 +1152,19 @@ btnDrop.addEventListener('touchstart', function(e) { e.preventDefault(); dropCha
 document.getElementById('btn-start').addEventListener('click', startGame);
 document.getElementById('btn-title').addEventListener('click', returnToTitle);
 document.getElementById('btn-title-gameover').addEventListener('click', returnToTitle);
+
+// ヘルプ表示
+var helpOverlay = document.getElementById('overlay-help');
+document.getElementById('btn-help').addEventListener('click', function() {
+  drawHelpWheel();
+  helpOverlay.classList.remove('hidden');
+});
+document.getElementById('btn-help-close').addEventListener('click', function() {
+  helpOverlay.classList.add('hidden');
+});
+helpOverlay.addEventListener('click', function(e) {
+  if (e.target === helpOverlay) helpOverlay.classList.add('hidden');
+});
 
 // スコア登録してリトライ
 document.getElementById('btn-save-score').addEventListener('click', async function() {
