@@ -448,6 +448,7 @@ var MOVE_STEP       = 18;   // 左右ボタン1回の移動量
 var MERGE_CD_MS     = 300;  // 合体後のクールダウン（ms）
 var NEW_BODY_FRAMES = 80;   // 新規ボディのゲームオーバー判定除外フレーム数
 var DANGER_FRAMES   = 90;   // 危険ライン超えをこのフレーム数続けるとゲームオーバー
+var HELP_WHEEL_IMAGE_URL = window.HELP_WHEEL_IMAGE_URL || 'images/shinka-ring.png';
 
 // ================================================================
 // ■ 画像キャッシュ（事前ロード）
@@ -667,7 +668,7 @@ function setHelpWheelImage() {
   var helpImg = document.getElementById('help-wheel-image');
   var note = document.getElementById('help-wheel-note');
   if (!helpImg) return;
-  var url = window.HELP_WHEEL_IMAGE_URL || '';
+  var url = HELP_WHEEL_IMAGE_URL;
   if (url) {
     helpImg.src = url;
     helpImg.style.display = 'block';
