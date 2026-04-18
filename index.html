@@ -460,10 +460,31 @@ var LS_KEY = 'charMergePuzzle_ranking_v1';
 
 function loadLocalRanking() {
   try {
-    return JSON.parse(localStorage.getItem(LS_KEY)) || [];
+    var raw = JSON.parse(localStorage.getItem(LS_KEY)) || [];
+    return dedupeTopRanking(raw, 10);
   } catch(e) {
     return [];
   }
+}
+
+/** 同名は最高スコアのみ残す（スコア降順） */
+function dedupeTopRanking(list, limit) {
+  var byName = {};
+  (list || []).forEach(function(item) {
+    var name = String((item && item.name) || '名無し').trim() || '名無し';
+    var scoreVal = Number((item && item.score) || 0);
+    if (!byName[name] || scoreVal > Number(byName[name].score || 0)) {
+      byName[name] = {
+        name: name,
+        score: scoreVal,
+        date: (item && item.date) || '',
+      };
+    }
+  });
+  return Object.keys(byName)
+    .map(function(name) { return byName[name]; })
+    .sort(function(a, b) { return b.score - a.score; })
+    .slice(0, limit || 10);
 }
 
 /** ランキングを読み込む */
@@ -475,9 +496,10 @@ async function loadRanking() {
         .limitToLast(10)
         .once('value');
       var rankingObj = snap.val() || {};
-      return Object.keys(rankingObj)
+      var rawList = Object.keys(rankingObj)
         .map(function(key) { return rankingObj[key]; })
         .sort(function(a, b) { return (b.score || 0) - (a.score || 0); });
+      return dedupeTopRanking(rawList, 10);
     } catch (e) {
       console.warn('Firebase ranking load failed. localStorage fallback.', e);
     }
@@ -487,13 +509,50 @@ async function loadRanking() {
 
 /** スコアを保存（上位10件のみ保持） */
 async function saveScore(name, sc) {
+  var safeName = String(name || '名無し').trim() || '名無し';
+  var safeScore = Number(sc || 0);
+
   if (firebaseReady) {
     try {
-      await rtdb.ref('rankings').push({
-        name: name,
-        score: sc,
-        date: new Date().toLocaleString('ja-JP', { hour12: false }),
-      });
+      var nowStr = new Date().toLocaleString('ja-JP', { hour12: false });
+      var sameNameSnap = await rtdb.ref('rankings')
+        .orderByChild('name')
+        .equalTo(safeName)
+        .once('value');
+      var sameNameObj = sameNameSnap.val() || {};
+      var keys = Object.keys(sameNameObj);
+
+      if (keys.length === 0) {
+        await rtdb.ref('rankings').push({
+          name: safeName,
+          score: safeScore,
+          date: nowStr,
+        });
+      } else {
+        var bestKey = keys[0];
+        var bestScore = Number((sameNameObj[bestKey] && sameNameObj[bestKey].score) || 0);
+
+        keys.forEach(function(k) {
+          var s = Number((sameNameObj[k] && sameNameObj[k].score) || 0);
+          if (s > bestScore) {
+            bestScore = s;
+            bestKey = k;
+          }
+        });
+
+        // 既存の方が高い（または同点）なら保存しない
+        if (safeScore <= bestScore) return;
+
+        // 最高スコアを上書きし、同名の重複レコードは整理
+        await rtdb.ref('rankings/' + bestKey).set({
+          name: safeName,
+          score: safeScore,
+          date: nowStr,
+        });
+        await Promise.all(keys
+          .filter(function(k) { return k !== bestKey; })
+          .map(function(k) { return rtdb.ref('rankings/' + k).remove(); }));
+      }
       return;
     } catch (e) {
       console.warn('Firebase ranking save failed. localStorage fallback.', e);
@@ -505,10 +564,16 @@ async function saveScore(name, sc) {
   var dateStr = (now.getMonth()+1) + '/' + now.getDate() + ' '
     + String(now.getHours()).padStart(2,'0') + ':'
     + String(now.getMinutes()).padStart(2,'0');
-  list.push({ name: name, score: sc, date: dateStr });
-  // スコア降順でソートして上位10件のみ保存
-  list.sort(function(a, b) { return b.score - a.score; });
-  var top10 = list.slice(0, 10);
+  var existing = list.find(function(entry) {
+    return (String(entry.name || '').trim() || '名無し') === safeName;
+  });
+  if (existing && safeScore <= Number(existing.score || 0)) return;
+
+  var withoutSameName = list.filter(function(entry) {
+    return (String(entry.name || '').trim() || '名無し') !== safeName;
+  });
+  withoutSameName.push({ name: safeName, score: safeScore, date: dateStr });
+  var top10 = dedupeTopRanking(withoutSameName, 10);
   localStorage.setItem(LS_KEY, JSON.stringify(top10));
 }
 
