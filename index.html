@@ -40,7 +40,7 @@ body {
   width: 100%;
   max-width: 400px;
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-start;
   align-items: center;
   gap: 8px;
   padding: 8px 16px 6px;
@@ -72,6 +72,13 @@ body {
   border: 2px solid #fde68a;
 }
 #next-canvas { border-radius: 50%; }
+
+#next-help-group {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
 
 #btn-title {
   min-width: 74px;
@@ -135,9 +142,11 @@ body {
 .help-overlay.hidden { display: none; }
 
 #help-title {
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 900;
-  color: #166534;
+  color: #ffffff;
+  -webkit-text-stroke: 2px #7aa56a;
+  text-shadow: 0 1px 0 #7aa56a;
   letter-spacing: 1px;
 }
 #help-canvas {
@@ -324,13 +333,15 @@ body {
     <div id="score-label">SCORE</div>
     <div id="score-display">0</div>
   </div>
-  <div id="next-box">
-    <div id="next-label">NEXT</div>
-    <div id="next-preview">
-      <canvas id="next-canvas" width="40" height="40"></canvas>
+  <div id="next-help-group">
+    <div id="next-box">
+      <div id="next-label">NEXT</div>
+      <div id="next-preview">
+        <canvas id="next-canvas" width="40" height="40"></canvas>
+      </div>
     </div>
+    <button id="btn-help" aria-label="シンカの輪を表示">❓</button>
   </div>
-  <button id="btn-help" aria-label="シンカの輪を表示">❓</button>
 </div>
 
 <!-- ========== ゲームエリア ========== -->
@@ -649,85 +660,66 @@ function drawHelpWheel() {
 
   var cx = size / 2;
   var cy = size / 2;
-  var ringR = 116;
-  var ringW = 34;
+  var outerR = 138;
+  var innerR = 72;
+  var midR = (outerR + innerR) / 2;
 
-  // ベースリング
-  hctx.strokeStyle = '#dcfce7';
-  hctx.lineWidth = ringW + 10;
-  hctx.lineCap = 'round';
-  hctx.beginPath();
-  hctx.arc(cx, cy, ringR, 0, Math.PI * 2);
-  hctx.stroke();
-
-  // 矢印風リング（時計回り）
-  var grad = hctx.createLinearGradient(40, 50, 300, 300);
-  grad.addColorStop(0, '#22c55e');
-  grad.addColorStop(0.5, '#84cc16');
-  grad.addColorStop(1, '#eab308');
-  hctx.strokeStyle = grad;
-  hctx.lineWidth = ringW;
-  hctx.lineCap = 'round';
-  hctx.beginPath();
-  hctx.arc(cx, cy, ringR, -Math.PI / 2, Math.PI * 1.82);
-  hctx.stroke();
-
-  // 最後の大きな矢印（進行方向）
-  var headAngle = Math.PI * 1.82;
-  var hx = cx + Math.cos(headAngle) * ringR;
-  var hy = cy + Math.sin(headAngle) * ringR;
+  // ドーナツリング（画像に近い色味）
   hctx.save();
-  hctx.translate(hx, hy);
-  hctx.rotate(headAngle + Math.PI / 2);
-  hctx.fillStyle = '#22c55e';
   hctx.beginPath();
-  hctx.moveTo(0, 20);
-  hctx.lineTo(17, -16);
-  hctx.lineTo(-17, -16);
+  hctx.arc(cx, cy, outerR, 0, Math.PI * 2);
+  hctx.arc(cx, cy, innerR, 0, Math.PI * 2, true);
   hctx.closePath();
-  hctx.fill();
+  hctx.clip();
+
+  var grad = hctx.createLinearGradient(cx - 120, cy - 130, cx + 120, cy + 120);
+  grad.addColorStop(0, '#38bdf8');
+  grad.addColorStop(0.02, '#16a34a');
+  grad.addColorStop(0.4, '#84cc16');
+  grad.addColorStop(1, '#facc15');
+  hctx.fillStyle = grad;
+  hctx.fillRect(cx - outerR - 20, cy - outerR - 20, (outerR + 20) * 2, (outerR + 20) * 2);
   hctx.restore();
 
-  // 各キャラ間の小矢印
-  for (var j = 0; j < 10; j++) {
-    var midA = -Math.PI / 2 + (Math.PI * 2 * (j + 0.5)) / 10;
-    var mx = cx + Math.cos(midA) * ringR;
-    var my = cy + Math.sin(midA) * ringR;
-    hctx.save();
-    hctx.translate(mx, my);
-    hctx.rotate(midA + Math.PI / 2);
-    hctx.fillStyle = '#65a30d';
-    hctx.beginPath();
-    hctx.moveTo(0, 8);
-    hctx.lineTo(8, -6);
-    hctx.lineTo(-8, -6);
-    hctx.closePath();
-    hctx.fill();
-    hctx.restore();
-  }
+  // 一体感を出すための薄いハイライト
+  var glow = hctx.createRadialGradient(cx + 26, cy - 18, 30, cx + 26, cy - 18, 170);
+  glow.addColorStop(0, 'rgba(255,255,255,0.28)');
+  glow.addColorStop(1, 'rgba(255,255,255,0)');
+  hctx.fillStyle = glow;
+  hctx.beginPath();
+  hctx.arc(cx, cy, outerR, 0, Math.PI * 2);
+  hctx.arc(cx, cy, innerR, 0, Math.PI * 2, true);
+  hctx.closePath();
+  hctx.fill();
 
-  // 顔アイコン配置
+  // 左上の太い矢印ヘッド
+  var ah = -Math.PI * 0.75;
+  var tipX = cx + Math.cos(ah) * (outerR + 10);
+  var tipY = cy + Math.sin(ah) * (outerR + 10);
+  var leftX = cx + Math.cos(ah + 0.42) * (midR - 8);
+  var leftY = cy + Math.sin(ah + 0.42) * (midR - 8);
+  var rightX = cx + Math.cos(ah - 0.42) * (midR + 4);
+  var rightY = cy + Math.sin(ah - 0.42) * (midR + 4);
+  hctx.fillStyle = '#4dbb45';
+  hctx.beginPath();
+  hctx.moveTo(tipX, tipY);
+  hctx.lineTo(leftX, leftY);
+  hctx.lineTo(rightX, rightY);
+  hctx.closePath();
+  hctx.fill();
+
+  // 顔アイコン配置（参考画像に合わせてリング内側寄り）
   var levels = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+  var startA = -Math.PI * 0.16;
+  var sweepA = Math.PI * 1.62;
+  var faceR = midR + 1;
   levels.forEach(function(level, i) {
-    var a = -Math.PI / 2 + (Math.PI * 2 * i) / levels.length;
-    var x = cx + Math.cos(a) * ringR;
-    var y = cy + Math.sin(a) * ringR;
-    drawCharCircle(hctx, x, y, 24, level);
-    hctx.fillStyle = '#166534';
-    hctx.font = 'bold 11px sans-serif';
-    hctx.textAlign = 'center';
-    hctx.textBaseline = 'top';
-    hctx.fillText('char' + level, x, y + 27);
+    var t = i / (levels.length - 1);
+    var a = startA + sweepA * t;
+    var x = cx + Math.cos(a) * faceR;
+    var y = cy + Math.sin(a) * faceR;
+    drawCharCircle(hctx, x, y, 22, level);
   });
-
-  // 始点の案内
-  var startX = cx;
-  var startY = cy - ringR - 48;
-  hctx.fillStyle = '#15803d';
-  hctx.font = '900 13px sans-serif';
-  hctx.textAlign = 'center';
-  hctx.textBaseline = 'middle';
-  hctx.fillText('START: char0', startX, startY);
 }
 
 /** NEXTプレビューを高DPI向けに初期化 */
